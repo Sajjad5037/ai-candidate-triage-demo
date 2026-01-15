@@ -1,129 +1,160 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+const API_BASE = "https://web-production-e5ae.up.railway.app";
 
 function App() {
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    title: "",
-    description: "",
-  });
+  const [issues, setIssues] = useState([]);
+  const [activeIssue, setActiveIssue] = useState(null);
+  const [reply, setReply] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  const [submitted, setSubmitted] = useState(false);
+  // 1️⃣ Load all issues
+  useEffect(() => {
+    fetch(`${API_BASE}/issues`)
+      .then(res => res.json())
+      .then(data => {
+        setIssues(data);
+        setActiveIssue(data[0] || null);
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
-  function handleChange(e) {
-    const { name, value } = e.target;
-    setForm(prev => ({
-      ...prev,
-      [name]: value,
-    }));
+  // 2️⃣ Load messages for selected issue
+  function selectIssue(issueId) {
+    fetch(`${API_BASE}/issues/${issueId}`)
+      .then(res => res.json())
+      .then(data => setActiveIssue(data));
   }
 
-  function handleSubmit(e) {
-    e.preventDefault();
+  // 3️⃣ Send reply for active issue
+  function sendReply() {
+    if (!reply.trim() || !activeIssue) return;
 
-    // Later: send this to API
-    console.log("Issue submitted:", form);
-
-    setSubmitted(true);
+    fetch(`${API_BASE}/issues/${activeIssue.id}/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        sender: "admin",
+        text: reply,
+      }),
+    })
+      .then(res => res.json())
+      .then(newMessage => {
+        setActiveIssue(prev => ({
+          ...prev,
+          messages: [...prev.messages, newMessage],
+        }));
+        setReply("");
+      });
   }
 
-  if (submitted) {
-    return (
-      <div style={styles.container}>
-        <h2>Issue Submitted</h2>
-        <p>
-          Thank you. Your issue has been received and I will get back to you
-          shortly.
-        </p>
-      </div>
-    );
+  if (loading) {
+    return <div style={{ padding: 20 }}>Loading issues…</div>;
   }
 
   return (
-    <div style={styles.container}>
-      <h2>Report an Issue</h2>
+    <div style={styles.app}>
+      {/* LEFT — Issues */}
+      <div style={styles.sidebar}>
+        <h3>Issues</h3>
 
-      <form onSubmit={handleSubmit} style={styles.form}>
-        <input
-          name="name"
-          placeholder="Your name"
-          value={form.name}
-          onChange={handleChange}
-          required
-          style={styles.input}
-        />
+        {issues.map(issue => (
+          <div
+            key={issue.id}
+            onClick={() => selectIssue(issue.id)}
+            style={{
+              ...styles.issueItem,
+              background:
+                activeIssue?.id === issue.id ? "#eee" : "transparent",
+            }}
+          >
+            <strong>{issue.title}</strong>
+            <div style={styles.status}>{issue.status}</div>
+          </div>
+        ))}
+      </div>
 
-        <input
-          name="email"
-          type="email"
-          placeholder="Your email"
-          value={form.email}
-          onChange={handleChange}
-          required
-          style={styles.input}
-        />
+      {/* RIGHT — Conversation */}
+      <div style={styles.chat}>
+        {activeIssue ? (
+          <>
+            <h3>{activeIssue.title}</h3>
 
-        <input
-          name="title"
-          placeholder="Short issue title"
-          value={form.title}
-          onChange={handleChange}
-          required
-          style={styles.input}
-        />
+            <div style={styles.messages}>
+              {activeIssue.messages.map((m, i) => (
+                <div
+                  key={i}
+                  style={{
+                    ...styles.message,
+                    alignSelf:
+                      m.sender === "admin" ? "flex-end" : "flex-start",
+                    background:
+                      m.sender === "admin" ? "#d1e7ff" : "#f1f1f1",
+                  }}
+                >
+                  {m.text}
+                </div>
+              ))}
+            </div>
 
-        <textarea
-          name="description"
-          placeholder="Describe the issue"
-          value={form.description}
-          onChange={handleChange}
-          required
-          style={styles.textarea}
-        />
-
-        <button type="submit" style={styles.button}>
-          Submit Issue
-        </button>
-      </form>
+            <div style={styles.replyBox}>
+              <input
+                value={reply}
+                onChange={e => setReply(e.target.value)}
+                placeholder="Reply to this issue…"
+                style={styles.input}
+              />
+              <button onClick={sendReply} style={styles.button}>
+                Send
+              </button>
+            </div>
+          </>
+        ) : (
+          <p>Select an issue</p>
+        )}
+      </div>
     </div>
   );
 }
 
 const styles = {
-  container: {
-    maxWidth: "520px",
-    margin: "60px auto",
-    padding: "24px",
-    fontFamily: "Arial, sans-serif",
-    border: "1px solid #e5e5e5",
-    borderRadius: "8px",
+  app: { display: "flex", height: "100vh", fontFamily: "Arial" },
+  sidebar: { width: 280, borderRight: "1px solid #ddd", padding: 16 },
+  issueItem: {
+    padding: 10,
+    cursor: "pointer",
+    borderRadius: 4,
+    marginBottom: 6,
   },
-  form: {
+  status: { fontSize: 12, color: "#666" },
+  chat: {
+    flex: 1,
+    padding: 16,
     display: "flex",
     flexDirection: "column",
-    gap: "12px",
   },
-  input: {
-    padding: "10px",
-    fontSize: "14px",
-    borderRadius: "4px",
-    border: "1px solid #ccc",
+  messages: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    overflowY: "auto",
   },
-  textarea: {
-    padding: "10px",
-    fontSize: "14px",
-    height: "120px",
-    borderRadius: "4px",
-    border: "1px solid #ccc",
-    resize: "vertical",
+  message: {
+    maxWidth: "70%",
+    padding: 10,
+    borderRadius: 6,
+    fontSize: 14,
   },
+  replyBox: { display: "flex", gap: 8, marginTop: 12 },
+  input: { flex: 1, padding: 10 },
   button: {
-    marginTop: "10px",
-    padding: "12px",
-    backgroundColor: "#000",
+    padding: "10px 16px",
+    background: "#000",
     color: "#fff",
     border: "none",
-    borderRadius: "4px",
     cursor: "pointer",
   },
 };
